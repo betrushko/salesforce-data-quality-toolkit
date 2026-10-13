@@ -1,0 +1,190 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>64.0</apiVersion>
+    <areMetricsLoggedToDataCloud>false</areMetricsLoggedToDataCloud>
+    <assignments>
+        <description>Actualiza HomePhone solo cuando el valor puede normalizarse con seguridad a E.164 Mexico.</description>
+        <name>Normalize_HomePhone</name>
+        <label>Normalizar HomePhone</label>
+        <locationX>402</locationX>
+        <locationY>503</locationY>
+        <assignmentItems>
+            <assignToReference>$Record.HomePhone</assignToReference>
+            <operator>Assign</operator>
+            <value>
+                <elementReference>HP_Normalized</elementReference>
+            </value>
+        </assignmentItems>
+        <connector>
+            <targetReference>Evaluate_MobilePhone</targetReference>
+        </connector>
+    </assignments>
+    <assignments>
+        <description>Copia HomePhone normalizado a MobilePhone solo cuando MobilePhone esta vacio.</description>
+        <name>Copy_HP_To_Blank_MP</name>
+        <label>Copiar HP a MP vacio</label>
+        <locationX>226</locationX>
+        <locationY>995</locationY>
+        <assignmentItems>
+            <assignToReference>$Record.MobilePhone</assignToReference>
+            <operator>Assign</operator>
+            <value>
+                <elementReference>$Record.HomePhone</elementReference>
+            </value>
+        </assignmentItems>
+    </assignments>
+    <assignments>
+        <description>Actualiza MobilePhone solo cuando el valor puede normalizarse con seguridad a E.164 Mexico.</description>
+        <name>Normalize_MobilePhone</name>
+        <label>Normalizar MobilePhone</label>
+        <locationX>314</locationX>
+        <locationY>995</locationY>
+        <assignmentItems>
+            <assignToReference>$Record.MobilePhone</assignToReference>
+            <operator>Assign</operator>
+            <value>
+                <elementReference>MP_Normalized</elementReference>
+            </value>
+        </assignmentItems>
+    </assignments>
+    <decisions>
+        <description>¿MobilePhone esta vacio?</description>
+        <name>Evaluate_MobilePhone</name>
+        <label>Evaluar MobilePhone</label>
+        <locationX>358</locationX>
+        <locationY>887</locationY>
+        <defaultConnectorLabel>Resultado predeterminado</defaultConnectorLabel>
+        <rules>
+            <name>MobilePhone_Blank_Use_HomePhone</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>MP_Blank_And_HP_Valid</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <booleanValue>true</booleanValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Copy_HP_To_Blank_MP</targetReference>
+            </connector>
+            <label>MP vacio y HP valido</label>
+        </rules>
+        <rules>
+            <name>MobilePhone_Can_Be_Normalized</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>MP_Should_Update</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <booleanValue>true</booleanValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Normalize_MobilePhone</targetReference>
+            </connector>
+            <label>MobilePhone valido distinto</label>
+        </rules>
+    </decisions>
+    <decisions>
+        <description>Evalua si HomePhone se puede limpiar y normalizar.</description>
+        <name>Evaluate_HomePhone</name>
+        <label>Evaluar HomePhone</label>
+        <locationX>644</locationX>
+        <locationY>287</locationY>
+        <defaultConnector>
+            <targetReference>Evaluate_MobilePhone</targetReference>
+        </defaultConnector>
+        <defaultConnectorLabel>No actualizar HomePhone</defaultConnectorLabel>
+        <rules>
+            <name>HomePhone_Can_Be_Normalized</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>HP_Should_Update</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <booleanValue>true</booleanValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Normalize_HomePhone</targetReference>
+            </connector>
+            <label>HomePhone valido distinto</label>
+        </rules>
+    </decisions>
+    <description>Normaliza HomePhone y MobilePhone de forma independiente con validacion conservadora para numeros mexicanos.</description>
+    <environments>Default</environments>
+    <formulas>
+        <description>HomePhone sin espacios, guiones, parentesis, puntos ni diagonales.</description>
+        <name>HP_Cleaned</name>
+        <dataType>String</dataType>
+        <expression>IF(ISBLANK({!$Record.HomePhone}), "", SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(TRIM({!$Record.HomePhone}), " ", ""), "-", ""), "(", ""), ")", ""), ".", ""), "/", ""))</expression>
+    </formulas>
+    <formulas>
+        <description>HomePhone normalizado a E.164 Mexico cuando cumple las reglas validas.</description>
+        <name>HP_Normalized</name>
+        <dataType>String</dataType>
+        <expression>IF(AND(NOT(REGEX({!$Record.HomePhone}, ".*[\\t\\r\\n].*")), NOT(REGEX({!$Record.HomePhone}, ".*[0-9]{7}[/;|].*[0-9]{7}.*"))), IF(REGEX({!HP_Cleaned}, "^[0-9]{10}$"), "+52" &amp; {!HP_Cleaned}, IF(REGEX({!HP_Cleaned}, "^52[0-9]{10}$"), "+" &amp; {!HP_Cleaned}, IF(REGEX({!HP_Cleaned}, "^\\+5252[0-9]{10}$"), "+52" &amp; RIGHT({!HP_Cleaned}, 10), IF(REGEX({!HP_Cleaned}, "^\\+52[0-9]{10}$"), {!HP_Cleaned}, "")))), "")</expression>
+    </formulas>
+    <formulas>
+        <description>Indica si HomePhone debe actualizarse.</description>
+        <name>HP_Should_Update</name>
+        <dataType>Boolean</dataType>
+        <expression>AND(NOT(ISBLANK({!HP_Normalized})), {!HP_Normalized} &lt;&gt; {!$Record.HomePhone})</expression>
+    </formulas>
+    <formulas>
+        <description>MobilePhone sin espacios, guiones, parentesis, puntos ni diagonales.</description>
+        <name>MP_Cleaned</name>
+        <dataType>String</dataType>
+        <expression>IF(ISBLANK({!$Record.MobilePhone}), "", SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(TRIM({!$Record.MobilePhone}), " ", ""), "-", ""), "(", ""), ")", ""), ".", ""), "/", ""))</expression>
+    </formulas>
+    <formulas>
+        <description>MobilePhone normalizado a E.164 Mexico cuando cumple las reglas validas.</description>
+        <name>MP_Normalized</name>
+        <dataType>String</dataType>
+        <expression>IF(AND(NOT(REGEX({!$Record.MobilePhone}, ".*[\\t\\r\\n].*")), NOT(REGEX({!$Record.MobilePhone}, ".*[0-9]{7}[/;|].*[0-9]{7}.*"))), IF(REGEX({!MP_Cleaned}, "^[0-9]{10}$"), "+52" &amp; {!MP_Cleaned}, IF(REGEX({!MP_Cleaned}, "^52[0-9]{10}$"), "+" &amp; {!MP_Cleaned}, IF(REGEX({!MP_Cleaned}, "^\\+5252[0-9]{10}$"), "+52" &amp; RIGHT({!MP_Cleaned}, 10), IF(REGEX({!MP_Cleaned}, "^\\+52[0-9]{10}$"), {!MP_Cleaned}, "")))), "")</expression>
+    </formulas>
+    <formulas>
+        <description>Indica si MobilePhone debe actualizarse.</description>
+        <name>MP_Should_Update</name>
+        <dataType>Boolean</dataType>
+        <expression>AND(NOT(ISBLANK({!MP_Normalized})), {!MP_Normalized} &lt;&gt; {!$Record.MobilePhone})</expression>
+    </formulas>
+    <formulas>
+        <description>Conserva el comportamiento anterior solo para MobilePhone vacio y HomePhone valido.</description>
+        <name>MP_Blank_And_HP_Valid</name>
+        <dataType>Boolean</dataType>
+        <expression>AND(ISBLANK({!$Record.MobilePhone}), NOT(ISBLANK({!$Record.HomePhone})), REGEX({!$Record.HomePhone}, "^\\+52[0-9]{10}$"))</expression>
+    </formulas>
+    <interviewLabel>Corrector MobilePhone {!$Flow.CurrentDateTime}</interviewLabel>
+    <label>Formatea Numero Telefonicos</label>
+    <processMetadataValues>
+        <name>BuilderType</name>
+        <value>
+            <stringValue>LightningFlowBuilder</stringValue>
+        </value>
+    </processMetadataValues>
+    <processMetadataValues>
+        <name>CanvasMode</name>
+        <value>
+            <stringValue>AUTO_LAYOUT_CANVAS</stringValue>
+        </value>
+    </processMetadataValues>
+    <processMetadataValues>
+        <name>OriginBuilderType</name>
+        <value>
+            <stringValue>LightningFlowBuilder</stringValue>
+        </value>
+    </processMetadataValues>
+    <processType>AutoLaunchedFlow</processType>
+    <start>
+        <locationX>518</locationX>
+        <locationY>0</locationY>
+        <connector>
+            <targetReference>Evaluate_HomePhone</targetReference>
+        </connector>
+        <object>Contact</object>
+        <recordTriggerType>CreateAndUpdate</recordTriggerType>
+        <triggerType>RecordBeforeSave</triggerType>
+    </start>
+    <status>Active</status>
+</Flow>
